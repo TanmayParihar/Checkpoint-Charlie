@@ -1,10 +1,10 @@
 validator,origin_hijack,path_fabrication,path_shortening
-RPKI,0.4758,0.0,0.0
-RPKI (Origin Only),0.9774,0.0046,0.5709
-Origin + 1st Hop,0.9774,0.4681,0.8816
-Origin + Last Hop,0.9774,0.489,0.8617
-Origin + 1st + Last,0.9774,0.8026,0.9871
-Origin + 2 Hops + Last,0.9774,0.9617,1.0
-BGPsec (Full Path),0.9774,1.0,1.0
-Anomaly Detector,0.9806,0.0046,0.0
-Selective + Anomaly,0.9806,0.8026,0.9871
+RPKI,0.4528,0.0,0.0
+Selective: Origin Only,0.9609,0.0,0.6355
+Origin + 1st Hop,0.9609,0.5258,0.8972
+Origin + Last Hop,0.9609,0.5446,0.9393
+Origin + 1st + Last,0.9609,0.8826,1.0
+Origin + 2 Hops + Last,0.9609,0.9906,1.0
+BGPsec (Full Path),0.9609,1.0,1.0
+Anomaly Detector,0.9772,0.5775,0.6355
+Selective + Anomaly,0.9772,0.9671,1.0

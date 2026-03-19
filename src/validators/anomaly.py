@@ -60,12 +60,20 @@ class AnomalyDetector(BaseValidator):
 
     name = "Anomaly Detector"
 
-    # ── Weights for each detection signal (must sum to ≤1 each individually) ─
+    # ── Weights for each detection signal (sum = 1.0) ────────────────────────
+    # W_VALLEY_FREE is deliberately higher than the other structural signals
+    # because a valley-free violation is a *hard* constraint: legitimate BGP
+    # paths must satisfy it, so any violation is strongly indicative of path
+    # manipulation (shortening or fabrication).  Setting it to 0.30 means a
+    # fabricated/shortened path that triggers both the path-length z-score
+    # (0.25) and the valley-free check (0.30) scores ≥ 0.55 > threshold (0.50),
+    # making those attacks reliably detectable without raising the false-positive
+    # rate on legitimate routes (which always satisfy valley-free).
     W_PATH_LENGTH   = 0.25
     W_ORIGIN_CHANGE = 0.35
-    W_VALLEY_FREE   = 0.20
-    W_NEW_AS        = 0.10
-    W_LOOP          = 0.10
+    W_VALLEY_FREE   = 0.30   # raised from 0.20; see note above
+    W_NEW_AS        = 0.05   # lowered from 0.10 to keep total = 1.0
+    W_LOOP          = 0.05   # lowered from 0.10 to keep total = 1.0
 
     def __init__(
         self,

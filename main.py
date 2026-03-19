@@ -216,6 +216,9 @@ def run(args: argparse.Namespace) -> None:
     pd.set_option("display.max_columns",  20)
     pd.set_option("display.width",        120)
     print(summary[["detection_rate", "false_positive_rate", "avg_time_ms", "security_cost_ratio"]].to_string())
+    print("\n  NOTE: avg_time_ms values are *model estimates* based on published")
+    print("  RSA-2048 benchmarks (0.50 ms/verification), not wall-clock timings.")
+    print("  Use them for relative comparisons between validators only.")
 
     _print_section("Results – Detection Rate by Attack Type")
     print(breakdown.to_string())

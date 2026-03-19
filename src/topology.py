@@ -117,14 +117,15 @@ class ASTopology:
         return True
 
     def sample_as_pairs(self, n: int) -> List[Tuple[int, int]]:
-        """Sample n (source, destination) AS pairs for route generation."""
+        """Sample n (source, destination) AS pairs for route generation.
+
+        The Barabási-Albert construction guarantees the graph is connected
+        (verified at build time via stats()), so every pair has a path and
+        the nx.has_path() guard is unnecessary overhead.
+        """
         ases = list(self.graph.nodes())
-        pairs = []
-        while len(pairs) < n:
-            src, dst = self.rng.sample(ases, 2)
-            if nx.has_path(self.graph, src, dst):
-                pairs.append((src, dst))
-        return pairs
+        pairs = [tuple(self.rng.sample(ases, 2)) for _ in range(n)]
+        return pairs  # type: ignore[return-value]
 
     # ── Internal build methods ────────────────────────────────────────────────
 

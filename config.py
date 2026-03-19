@@ -23,17 +23,29 @@ ATTACK_TYPE_DIST = {
 }
 
 # ── Timing constants (milliseconds per operation) ───────────────────────────
-# Based on empirical BGPsec measurements in the literature
-CRYPTO_VERIFY_MS    = 0.50   # RSA-2048 signature verification per hop
-HASH_LOOKUP_MS      = 0.01   # Hash-table / dict lookup (anomaly detector)
+# NOTE: these are *model parameters* drawn from published BGPsec benchmarks,
+# not wall-clock measurements.  All timing comparisons are therefore relative
+# (validator A vs. validator B), not absolute deployment estimates.
+CRYPTO_VERIFY_MS    = 0.50   # RSA-2048 signature verification per hop (model)
+HASH_LOOKUP_MS      = 0.01   # Hash-table / dict lookup (model)
 
 # ── Selective-hop combinations to benchmark ──────────────────────────────────
 # Position 0  = origin AS (rightmost in AS_PATH)
 # Position 1  = AS immediately after origin
 # Position -1 = receiving peer (leftmost in AS_PATH)
 # None        = verify all hops (BGPsec)
+#
+# NOTE on "Selective: Origin Only" vs. the RPKIValidator class:
+#   RPKIValidator   – models real-world RPKI: checks prefix→origin binding in
+#                     the ROA database.  Only ~45 % of prefixes have a ROA, so
+#                     detection is limited by deployment coverage.
+#   "Selective: Origin Only" (SelectiveHopValidator, positions=[0]) – checks
+#                     topological adjacency at the origin hop for *every* route,
+#                     regardless of ROA coverage.  It represents the theoretical
+#                     ceiling of origin-only cryptographic verification at 100 %
+#                     deployment and is a different mechanism entirely.
 HOP_COMBINATIONS = {
-    "origin_only":         {"positions": [0],         "label": "RPKI (Origin Only)"},
+    "origin_only":         {"positions": [0],         "label": "Selective: Origin Only"},
     "origin_first":        {"positions": [0, 1],      "label": "Origin + 1st Hop"},
     "origin_last":         {"positions": [0, -1],     "label": "Origin + Last Hop"},
     "origin_first_last":   {"positions": [0, 1, -1],  "label": "Origin + 1st + Last"},
