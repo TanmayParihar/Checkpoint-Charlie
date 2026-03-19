@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Checkpoint Charlie — BGP Security Simulator</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#c9d1d9;--muted:#8b949e;--strong:#f0f6fc;
+  --blue:#388bfd;--blue-d:#0c1f3d;
+  --green:#3fb950;--green-d:#0e2a1b;
+  --red:#f85149;--red-d:#2e1212;
+  --yellow:#d29922;--yellow-d:#2a1e00;
+  --purple:#a371f7;--purple-d:#1e1040;
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+.app{display:flex;flex-direction:column;height:100vh}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:9px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hdr-left h1{font-size:14px;font-weight:600;color:var(--strong)}
+.hdr-left p{font-size:11px;color:var(--muted);margin-top:1px}
+.legend{display:flex;gap:14px}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.leg-dot{width:10px;height:10px;border-radius:50%;border:2px solid}
+.body{flex:1;display:grid;grid-template-columns:1fr 370px;overflow:hidden}
+.left{padding:12px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.right{background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.topo-card{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;min-height:0;position:relative}
+#topo{width:100%;height:100%}
+
+/* Path strip */
+.path-strip{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px}
+.strip-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.path-nodes{display:flex;align-items:center;flex-wrap:wrap;gap:4px;min-height:30px}
+.pas{padding:4px 9px;border-radius:5px;font-size:11.5px;font-weight:700;border:1.5px solid var(--border);background:var(--bg3);color:var(--muted);transition:all .3s}
+.pas.origin{border-color:var(--green);color:var(--green);background:var(--green-d)}
+.pas.receiver{border-color:var(--purple);color:var(--purple);background:var(--purple-d)}
+.pas.on-path{border-color:var(--blue);color:var(--blue);background:var(--blue-d)}
+.pas.attacked{border-color:var(--red);color:var(--red);background:var(--red-d);animation:blink .7s infinite}
+.pas.checking{border-color:var(--yellow);color:var(--yellow);background:var(--yellow-d);animation:blink .4s infinite}
+.pas.ok{border-color:var(--green);color:var(--green);background:var(--green-d)}
+.pas.fail{border-color:var(--red);color:var(--red);background:var(--red-d)}
+.pa-arrow{color:var(--border);font-size:12px;line-height:1}
+
+/* Right panel sections */
+.ctrl-sec{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.ctrl-row{display:flex;align-items:center;gap:8px}
+.ctrl-lbl{font-size:10.5px;color:var(--muted);width:64px;flex-shrink:0}
+select{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 8px;font-size:12px;cursor:pointer}
+.btn-sec{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center}
+.btn{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 12px;font-size:12px;cursor:pointer;transition:all .15s}
+.btn:hover{background:var(--border)}
+.btn.primary{background:#1f6feb;border-color:#1f6feb;color:#fff}
+.btn.primary:hover{background:var(--blue);border-color:var(--blue)}
+.btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+.step-ctr{font-size:11px;color:var(--muted);margin-left:auto}
+.log-sec{flex:1;overflow-y:auto;padding:10px 12px;font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:11px;line-height:1.6;min-height:0}
+.log-line{display:flex;gap:5px;padding:1px 0}
+.log-line .bul{color:var(--border);flex-shrink:0}
+.log-line.info .msg{color:var(--blue)}
+.log-line.step .msg{color:var(--text)}
+.log-line.attack .msg{color:var(--red)}
+.log-line.check .msg{color:var(--yellow)}
+.log-line.success .msg{color:var(--green)}
+.log-line.fail .msg{color:var(--red)}
+.log-line.header .msg{color:var(--purple);font-weight:600}
+.log-line.dim .msg{color:var(--muted)}
+.result-sec{padding:10px 14px;border-top:1px solid var(--border)}
+.result-badge{padding:8px;border-radius:6px;font-size:12px;font-weight:700;text-align:center;letter-spacing:.04em}
+.result-badge.pending{background:var(--bg3);color:var(--muted);border:1px solid var(--border)}
+.result-badge.detected{background:var(--green-d);color:var(--green);border:1px solid var(--green)}
+.result-badge.missed{background:var(--red-d);color:var(--red);border:1px solid var(--red)}
+.result-badge.legit{background:var(--blue-d);color:var(--blue);border:1px solid var(--blue)}
+
+/* Comparison grid */
+.cmp-sec{padding:8px 14px;border-top:1px solid var(--border)}
+.cmp-title{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+.cmp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.cmp{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 6px;text-align:center}
+.cmp .cn{font-size:9.5px;color:var(--muted);margin-bottom:2px}
+.cmp .cv{font-size:12px;font-weight:700;color:var(--muted)}
+.cmp.det{border-color:var(--green)}.cmp.det .cv{color:var(--green)}
+.cmp.mis{border-color:var(--red)}.cmp.mis .cv{color:var(--red)}
+.cmp.pas-v{border-color:var(--blue)}.cmp.pas-v .cv{color:var(--blue)}
+
+/* SVG */
+.edge{stroke:#21262d;stroke-width:2;fill:none;transition:stroke .35s,stroke-width .35s,opacity .35s,filter .35s}
+.edge.tier1{stroke:#2a2f4a;stroke-width:2.5}
+.edge.active{stroke:var(--blue);stroke-width:3.5}
+.edge.checking-e{stroke:var(--yellow);stroke-width:4;filter:drop-shadow(0 0 3px var(--yellow))}
+.edge.ok-e{stroke:var(--green);stroke-width:4;filter:drop-shadow(0 0 3px var(--green))}
+.edge.fail-e{stroke:var(--red);stroke-width:4;stroke-dasharray:7 4;animation:dashFlow .4s linear infinite;filter:drop-shadow(0 0 4px var(--red))}
+.edge.ghost{stroke:var(--red);stroke-width:2;stroke-dasharray:5 4;opacity:.5;transition:none}
+.edge.dim{stroke:#1a1e24;stroke-width:1.5;opacity:.5}
+.node-body{transition:fill .35s,stroke .35s,filter .35s}
+.node-label{font-size:10.5px;font-weight:700;text-anchor:middle;dominant-baseline:central;fill:var(--muted);pointer-events:none;transition:fill .35s}
+.tier-lbl{font-size:8.5px;font-weight:600;text-anchor:middle;fill:#30363d;pointer-events:none}
+.roa-box{fill:var(--bg3);stroke:var(--border);stroke-width:1.5;rx:6;transition:stroke .35s}
+.roa-txt{font-size:9.5px;text-anchor:middle;dominant-baseline:central;fill:var(--muted);pointer-events:none}
+
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.55}}
+@keyframes dashFlow{to{stroke-dashoffset:-11}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 4px var(--green))}50%{filter:drop-shadow(0 0 9px var(--green))}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="hdr-left">
+    <h1>🔒 Checkpoint Charlie — BGP Security Visual Simulator</h1>
+    <p>Selective Hop Verification × Statistical Anomaly Detection</p>
+  </div>
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="border-color:#1f6feb"></div>Tier-1</div>
+    <div class="leg-item"><div class="leg-dot" style="border-color:#388bfd"></div>Tier-2</div>
+    <div class="leg-item"><div class="leg-dot" style="border-color:#58a6ff"></div>Tier-3</div>
+    <div class="leg-item"><div class="leg-dot" style="border-color:#3fb950"></div>Origin</div>
+    <div class="leg-item"><div class="leg-dot" style="border-color:#a371f7"></div>Receiver</div>
+    <div class="leg-item"><div class="leg-dot" style="border-color:#f85149"></div>Attacked</div>
+  </div>
+</header>
+
+<div class="body">
+  <div class="left">
+    <div class="topo-card">
+      <svg id="topo" viewBox="0 0 520 400" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrowG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M1 1L9 5L1 9" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+          </marker>
+          <marker id="arrowR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M1 1L9 5L1 9" fill="none" stroke="#f85149" stroke-width="1.5"/>
+          </marker>
+        </defs>
+
+        <!-- Tier labels background bands (subtle) -->
+        <rect x="0" y="0" width="520" height="130" fill="#0a0d13" opacity=".4"/>
+        <rect x="0" y="130" width="520" height="140" fill="#0d1017" opacity=".3"/>
+        <rect x="0" y="270" width="520" height="130" fill="#0a0d13" opacity=".4"/>
+        <text class="tier-lbl" x="500" y="55">T1</text>
+        <text class="tier-lbl" x="500" y="195">T2</text>
+        <text class="tier-lbl" x="500" y="335">T3</text>
+
+        <!-- Real edges -->
+        <line id="e-AS1-AS2"  class="edge tier1" x1="200" y1="85" x2="320" y2="85"/>
+        <line id="e-AS1-AS3"  class="edge" x1="200" y1="85" x2="80"  y2="195"/>
+        <line id="e-AS1-AS4"  class="edge" x1="200" y1="85" x2="200" y2="195"/>
+        <line id="e-AS2-AS4"  class="edge" x1="320" y1="85" x2="200" y2="195"/>
+        <line id="e-AS2-AS5"  class="edge" x1="320" y1="85" x2="320" y2="195"/>
+        <line id="e-AS2-AS6"  class="edge" x1="320" y1="85" x2="440" y2="195"/>
+        <line id="e-AS3-AS7"  class="edge" x1="80"  y1="195" x2="80"  y2="320"/>
+        <line id="e-AS4-AS8"  class="edge" x1="200" y1="195" x2="200" y2="320"/>
+        <line id="e-AS4-AS9"  class="edge" x1="200" y1="195" x2="320" y2="320"/>
+        <line id="e-AS5-AS9"  class="edge" x1="320" y1="195" x2="320" y2="320"/>
+        <line id="e-AS5-AS10" class="edge" x1="320" y1="195" x2="440" y2="320"/>
+        <line id="e-AS6-AS10" class="edge" x1="440" y1="195" x2="440" y2="320"/>
+
+        <!-- Ghost edges (attack paths, shown when needed) -->
+        <line id="g-AS3-AS9"  class="edge ghost" x1="80"  y1="195" x2="320" y2="320" style="display:none"/>
+        <line id="g-AS4-AS3"  class="edge ghost" x1="200" y1="195" x2="80"  y2="195" style="display:none"/>
+        <line id="g-AS4-AS6"  class="edge ghost" x1="200" y1="195" x2="440" y2="195" style="display:none"/>
+        <line id="g-AS6-AS1"  class="edge ghost" x1="440" y1="195" x2="200" y2="85"  style="display:none"/>
+
+        <!-- Nodes (T1) -->
+        <g id="n-AS1" class="node-g">
+          <circle class="node-body" cx="200" cy="85" r="20" fill="#0f1721" stroke="#1f6feb" stroke-width="2.5"/>
+          <text class="node-label" x="200" y="85">AS1</text>
+          <text class="tier-lbl" x="200" y="108">T1</text>
+        </g>
+        <g id="n-AS2" class="node-g">
+          <circle class="node-body" cx="320" cy="85" r="20" fill="#0f1721" stroke="#1f6feb" stroke-width="2.5"/>
+          <text class="node-label" x="320" y="85">AS2</text>
+          <text class="tier-lbl" x="320" y="108">T1</text>
+        </g>
+
+        <!-- Nodes (T2) -->
+        <g id="n-AS3" class="node-g">
+          <circle class="node-body" cx="80"  cy="195" r="18" fill="#0f1921" stroke="#388bfd" stroke-width="2"/>
+          <text class="node-label" x="80"  y="195">AS3</text>
+          <text class="tier-lbl" x="80"  y="217">T2</text>
+        </g>
+        <g id="n-AS4" class="node-g">
+          <circle class="node-body" cx="200" cy="195" r="18" fill="#0f1921" stroke="#388bfd" stroke-width="2"/>
+          <text class="node-label" x="200" y="195">AS4</text>
+          <text class="tier-lbl" x="200" y="217">T2</text>
+        </g>
+        <g id="n-AS5" class="node-g">
+          <circle class="node-body" cx="320" cy="195" r="18" fill="#0f1921" stroke="#388bfd" stroke-width="2"/>
+          <text class="node-label" x="320" y="195">AS5</text>
+          <text class="tier-lbl" x="320" y="217">T2</text>
+        </g>
+        <g id="n-AS6" class="node-g">
+          <circle class="node-body" cx="440" cy="195" r="18" fill="#0f1921" stroke="#388bfd" stroke-width="2"/>
+          <text class="node-label" x="440" y="195">AS6</text>
+          <text class="tier-lbl" x="440" y="217">T2</text>
+        </g>
+
+        <!-- Nodes (T3) -->
+        <g id="n-AS7" class="node-g">
+          <circle class="node-body" cx="80"  cy="320" r="16" fill="#0f1921" stroke="#58a6ff" stroke-width="1.5"/>
+          <text class="node-label" x="80"  y="320">AS7</text>
+        </g>
+        <g id="n-AS8" class="node-g">
+          <circle class="node-body" cx="200" cy="320" r="16" fill="#0f1921" stroke="#58a6ff" stroke-width="1.5"/>
+          <text class="node-label" x="200" y="320">AS8</text>
+        </g>
+        <g id="n-AS9" class="node-g">
+          <circle class="node-body" cx="320" cy="320" r="16" fill="#0f1921" stroke="#58a6ff" stroke-width="1.5"/>
+          <text class="node-label" x="320" y="320">AS9</text>
+        </g>
+        <g id="n-AS10" class="node-g">
+          <circle class="node-body" cx="440" cy="320" r="16" fill="#0f1921" stroke="#58a6ff" stroke-width="1.5"/>
+          <text class="node-label" x="440" y="320">AS10</text>
+        </g>
+
+        <!-- ROA Database box -->
+        <g id="roa-box">
+          <rect x="15" y="15" width="88" height="48" rx="6" class="roa-box" id="roa-rect"/>
+          <text class="roa-txt" x="59" y="31" style="font-weight:600;fill:#8b949e">ROA Database</text>
+          <text class="roa-txt" x="59" y="45" id="roa-content">10.7.0.0/20 → AS7</text>
+        </g>
+
+        <!-- Step description overlay -->
+        <rect x="0" y="365" width="520" height="35" fill="#0d1117" opacity=".85"/>
+        <text id="step-desc" font-size="11" fill="#8b949e" x="12" y="385" font-family="-apple-system,sans-serif">Select a scenario and validator, then press Play</text>
+      </svg>
+    </div>
+
+    <div class="path-strip">
+      <div class="strip-lbl">
+        <span>AS_PATH <span style="color:var(--border)">(receiver ← ... ← origin)</span></span>
+        <span id="prefix-lbl" style="color:var(--muted);font-size:10px">Prefix: 10.7.0.0/20</span>
+      </div>
+      <div class="path-nodes" id="path-display">
+        <span class="pas" style="color:var(--muted)">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="ctrl-sec">
+      <div class="ctrl-row">
+        <span class="ctrl-lbl">Scenario</span>
+        <select id="sel-scenario">
+          <option value="legit">✅ Legitimate Route</option>
+          <option value="hijack">🔴 Origin Hijack</option>
+          <option value="shortening">🟠 Path Shortening</option>
+          <option value="fabrication">🟡 Path Fabrication</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-lbl">Validator</span>
+        <select id="sel-validator">
+          <option value="rpki">RPKI (ROA only)</option>
+          <option value="origin_only">Selective: Origin Only</option>
+          <option value="orig_1st_last" selected>Origin + 1st + Last</option>
+          <option value="bgpsec">BGPsec (Full Path)</option>
+          <option value="anomaly">Anomaly Detector</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-lbl">Speed</span>
+        <select id="sel-speed">
+          <option value="1500">Slow</option>
+          <option value="900" selected>Normal</option>
+          <option value="400">Fast</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="btn-sec">
+      <button class="btn primary" id="btn-play">▶ Play</button>
+      <button class="btn" id="btn-step" title="Step forward">⏭ Step</button>
+      <button class="btn" id="btn-back" title="Step back">⏮</button>
+      <button class="btn" id="btn-reset">↺ Reset</button>
+      <span class="step-ctr" id="step-counter">0 / 0</span>
+    </div>
+
+    <div class="log-sec" id="log-area"></div>
+
+    <div class="result-sec">
+      <div class="result-badge pending" id="result-badge">⏳ Awaiting simulation…</div>
+    </div>
+
+    <div class="cmp-sec">
+      <div class="cmp-title">All Validators — This Scenario</div>
+      <div class="cmp-grid" id="cmp-grid">
+        <div class="cmp"><div class="cn">RPKI</div><div class="cv">—</div></div>
+        <div class="cmp"><div class="cn">Orig Only</div><div class="cv">—</div></div>
+        <div class="cmp"><div class="cn">Orig+1+L</div><div class="cv">—</div></div>
+        <div class="cmp"><div class="cn">BGPsec</div><div class="cv">—</div></div>
+        <div class="cmp"><div class="cn">Anomaly</div><div class="cv">—</div></div>
+        <div class="cmp"><div class="cn">Cost ratio</div><div class="cv">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+
+const NODES = {
+  AS1:{x:200,y:85}, AS2:{x:320,y:85},
+  AS3:{x:80,y:195}, AS4:{x:200,y:195}, AS5:{x:320,y:195}, AS6:{x:440,y:195},
+  AS7:{x:80,y:320}, AS8:{x:200,y:320}, AS9:{x:320,y:320}, AS10:{x:440,y:320}
+};
+
+const REAL_EDGES = new Set([
+  'AS1-AS2','AS2-AS1','AS1-AS3','AS3-AS1','AS1-AS4','AS4-AS1',
+  'AS2-AS4','AS4-AS2','AS2-AS5','AS5-AS2','AS2-AS6','AS6-AS2',
+  'AS3-AS7','AS7-AS3','AS4-AS8','AS8-AS4','AS4-AS9','AS9-AS4',
+  'AS5-AS9','AS9-AS5','AS5-AS10','AS10-AS5','AS6-AS10','AS10-AS6'
+]);
+const isAdj = (a,b) => REAL_EDGES.has(`${a}-${b}`);
+
+// Canonical edge key (smaller index first for lookup)
+const EDGE_ORDER = ['AS1-AS2','AS1-AS3','AS1-AS4','AS2-AS4','AS2-AS5','AS2-AS6',
+  'AS3-AS7','AS4-AS8','AS4-AS9','AS5-AS9','AS5-AS10','AS6-AS10'];
+function getEdgeEl(a,b){
+  for(const k of EDGE_ORDER){const[ea,eb]=k.split('-');if((ea===a&&eb===b)||(ea===b&&eb===a))return'e-'+k;}
+  return null;
+}
+function getGhostEl(a,b){
+  const k1=`g-${a}-${b}`, k2=`g-${b}-${a}`;
+  return document.getElementById(k1)||document.getElementById(k2);
+}
+
+const SCENARIOS = {
+  legit:      {name:'Legitimate Route',  path:['AS8','AS4','AS1','AS3','AS7'],         attack:null},
+  hijack:     {name:'Origin Hijack',     path:['AS8','AS4','AS1','AS3','AS9'],         attack:{type:'origin_hijack', desc:'AS9 hijacks prefix 10.7.0.0/20 (true origin: AS7)', ghostEdges:[['AS3','AS9']], fakePaths:[['AS3','AS9']], insertedIdx:4}},
+  shortening: {name:'Path Shortening',   path:['AS8','AS4','AS3','AS7'],               attack:{type:'path_shortening', desc:'AS4 removes AS1 to appear closer to origin', ghostEdges:[['AS4','AS3']], fakePaths:[['AS4','AS3']], insertedIdx:null}},
+  fabrication:{name:'Path Fabrication',  path:['AS8','AS4','AS6','AS1','AS3','AS7'],   attack:{type:'path_fabrication', desc:'AS6 falsely inserted between AS4 and AS1', ghostEdges:[['AS4','AS6'],['AS6','AS1']], fakePaths:[['AS4','AS6'],['AS6','AS1']], insertedIdx:2}},
+};
+
+// For each validator×scenario: list of validation check steps
+// Each check: {edge:[a,b]} or {roa:{claimed,expected}} or {anomaly:{signal,score}}
+const VSETS = {
+  rpki:{
+    legit:      [{roa:{claimed:'AS7',expected:'AS7',pass:true}}],
+    hijack:     [{roa:{claimed:'AS9',expected:'AS7',pass:false}}],
+    shortening: [{roa:{claimed:'AS7',expected:'AS7',pass:true}}],
+    fabrication:[{roa:{claimed:'AS7',expected:'AS7',pass:true}}],
+  },
+  origin_only:{
+    legit:      [{edge:['AS3','AS7'],pass:true}],
+    hijack:     [{edge:['AS3','AS9'],pass:false}],
+    shortening: [{edge:['AS3','AS7'],pass:true}],   // n=4,pos=0→idx2→AS3↔AS7 ✓ MISSED
+    fabrication:[{edge:['AS3','AS7'],pass:true}],   // n=6,pos=0→idx4→AS3↔AS7 ✓ MISSED
+  },
+  orig_1st_last:{
+    legit:      [{edge:['AS8','AS4'],pass:true},{edge:['AS1','AS3'],pass:true},{edge:['AS3','AS7'],pass:true}],
+    hijack:     [{edge:['AS8','AS4'],pass:true},{edge:['AS1','AS3'],pass:true},{edge:['AS3','AS9'],pass:false}],
+    shortening: [{edge:['AS8','AS4'],pass:true},{edge:['AS4','AS3'],pass:false}], // idx1 breaks → CAUGHT
+    fabrication:[{edge:['AS8','AS4'],pass:true},{edge:['AS1','AS3'],pass:true},{edge:['AS3','AS7'],pass:true}], // MISSED: AS4-AS6 not checked
+  },
+  bgpsec:{
+    legit:      [{edge:['AS8','AS4'],pass:true},{edge:['AS4','AS1'],pass:true},{edge:['AS1','AS3'],pass:true},{edge:['AS3','AS7'],pass:true}],
+    hijack:     [{edge:['AS8','AS4'],pass:true},{edge:['AS4','AS1'],pass:true},{edge:['AS1','AS3'],pass:true},{edge:['AS3','AS9'],pass:false}],
+    shortening: [{edge:['AS8','AS4'],pass:true},{edge:['AS4','AS3'],pass:false}],
+    fabrication:[{edge:['AS8','AS4'],pass:true},{edge:['AS4','AS6'],pass:false}],
+  },
+  anomaly:{
+    legit:[
+      {anomaly:{signal:'Path length: 5 hops (z-score ≈ 0.0)',pass:true,score:'0.00'}},
+      {anomaly:{signal:'Origin AS7 seen before for 10.7.0.0/20',pass:true,score:'0.00'}},
+      {anomaly:{signal:'Valley-free constraint: satisfied',pass:true,score:'0.00'}},
+      {anomaly:{signal:'Final anomaly score: 0.00 ≤ threshold 0.50',pass:true,score:'0.00'}},
+    ],
+    hijack:[
+      {anomaly:{signal:'Path length: 5 hops — normal',pass:true,score:'0.00'}},
+      {anomaly:{signal:'Origin AS9 NEVER seen for this prefix!',pass:false,score:'0.35'}},
+      {anomaly:{signal:'Valley-free fails: AS3↔AS9 not adjacent',pass:false,score:'0.65'}},
+      {anomaly:{signal:'Final score: 0.65 > threshold 0.50 → FLAGGED',pass:false,score:'0.65'}},
+    ],
+    shortening:[
+      {anomaly:{signal:'Path length: 4 hops (z-score = 2.0) — SHORT',pass:false,score:'0.25'}},
+      {anomaly:{signal:'Origin AS7 consistent',pass:true,score:'0.25'}},
+      {anomaly:{signal:'Valley-free fails: AS4↔AS3 not adjacent',pass:false,score:'0.55'}},
+      {anomaly:{signal:'Final score: 0.55 > threshold 0.50 → FLAGGED',pass:false,score:'0.55'}},
+    ],
+    fabrication:[
+      {anomaly:{signal:'Path length: 6 hops (z-score = 2.0) — LONG',pass:false,score:'0.25'}},
+      {anomaly:{signal:'Origin AS7 consistent',pass:true,score:'0.25'}},
+      {anomaly:{signal:'Valley-free fails: AS4↔AS6 not adjacent',pass:false,score:'0.55'}},
+      {anomaly:{signal:'Final score: 0.55 > threshold 0.50 → FLAGGED',pass:false,score:'0.55'}},
+    ],
+  },
+};
+
+const DETECTION = {
+  legit:      {rpki:'pass',origin_only:'pass',orig_1st_last:'pass',bgpsec:'pass',anomaly:'pass'},
+  hijack:     {rpki:'det', origin_only:'det', orig_1st_last:'det', bgpsec:'det', anomaly:'det'},
+  shortening: {rpki:'miss',origin_only:'miss',orig_1st_last:'det', bgpsec:'det', anomaly:'det'},
+  fabrication:{rpki:'miss',origin_only:'miss',orig_1st_last:'miss',bgpsec:'det', anomaly:'det'},
+};
+
+const VALIDATOR_META = {
+  rpki:         {name:'RPKI',        cost:'0.24ms', scr:'0.82'},
+  origin_only:  {name:'Orig Only',   cost:'0.50ms', scr:'1.17'},
+  orig_1st_last:{name:'Orig+1st+L',  cost:'1.46ms', scr:'0.66'},
+  bgpsec:       {name:'BGPsec',      cost:'1.73ms', scr:'0.57'},
+  anomaly:      {name:'Anomaly',     cost:'0.05ms', scr:'15.2'},
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let steps = [], curStep = -1, playing = false, playTimer = null;
+
+// ── Step Builder ──────────────────────────────────────────────────────────────
+function buildSteps(scKey, vKey) {
+  const sc = SCENARIOS[scKey];
+  const path = sc.path;
+  const n = path.length;
+  const checks = VSETS[vKey][scKey];
+  const result = DETECTION[scKey][vKey];
+  const steps = [];
+
+  // ── Intro
+  steps.push({
+    desc:`Scenario: ${sc.name}  |  Validator: ${VALIDATOR_META[vKey].name}`,
+    logs:[
+      {t:'header',m:`══ ${sc.name.toUpperCase()} ══`},
+      {t:'info',m:`Prefix: 10.7.0.0/20    ROA says origin = AS7`},
+      {t:'info',m:`AS_PATH: ${[...path].reverse().join(' → ')}`},
+      {t:'dim', m:`Validator: ${VALIDATOR_META[vKey].name} (avg cost: ${VALIDATOR_META[vKey].cost})`},
+      {t:'dim', m:`─────────────────────────`},
+      {t:'step',m:`Waiting for route announcement…`},
+    ],
+    nodes: Object.fromEntries(Object.keys(NODES).map(k=>[k,'normal'])),
+    pathStates: path.map((_,i)=>i===0?'receiver':i===n-1?'origin':'normal'),
+    ghostShow: [],
+    result:'pending',
+  });
+
+  // ── Propagation steps (origin → receiver)
+  for(let hop = n-1; hop >= 0; hop--) {
+    const as = path[hop];
+    const isOrigin = hop === n-1;
+    const logs = isOrigin
+      ? [{t:'step',m:`📡 ${as} announces prefix 10.7.0.0/20`}]
+      : [{t:'step',m:`${path[hop+1]} → ${as}: route relayed`}];
+    const ns = {};
+    Object.keys(NODES).forEach(k=>ns[k]='dim');
+    for(let i=hop;i<n;i++) ns[path[i]] = i===0?'receiver':i===n-1?'origin':'active';
+    steps.push({
+      desc: isOrigin ? `${as} originates prefix 10.7.0.0/20` : `Route hop: ${path[hop+1]} → ${as}`,
+      logs, nodes:ns,
+      pathStates: path.map((_,i)=>i<hop?'normal':i===0?'receiver':i===n-1?'origin':'on-path'),
+      ghostShow:[],
+      activeEdges: path.slice(hop, n-1).map((_,i)=>[path[hop+i],path[hop+i+1]]),
+      result:'pending',
+    });
+  }
+
+  // ── Attack step
+  if(sc.attack) {
+    const atkNodes = {};
+    Object.keys(NODES).forEach(k=>atkNodes[k]='dim');
+    path.forEach((as,i)=>{
+      if(i===0) atkNodes[as]='receiver';
+      else if(i===n-1) atkNodes[as]=(sc.attack.type==='origin_hijack'?'attacked':'origin');
+      else if(i===sc.attack.insertedIdx) atkNodes[as]='attacked';
+      else atkNodes[as]='active';
+    });
+    steps.push({
+      desc:`⚠  ATTACK: ${sc.attack.desc}`,
+      logs:[
+        {t:'attack',m:`[ATTACK DETECTED IN SIMULATION]`},
+        {t:'attack',m:`Type: ${sc.attack.type.replace(/_/g,' ')}`},
+        {t:'attack',m:sc.attack.desc},
+        {t:'dim',   m:`Validator will now attempt to detect…`},
+      ],
+      nodes:atkNodes,
+      pathStates: path.map((as,i)=>{
+        if(i===0)return'receiver';
+        if(i===n-1)return sc.attack.type==='origin_hijack'?'attacked':'origin';
+        if(i===sc.attack.insertedIdx)return'attacked';
+        return'on-path';
+      }),
+      ghostShow: sc.attack.ghostEdges,
+      activeEdges: [],
+      result:'pending',
+    });
+  }
+
+  // ── Validation steps
+  let caught = false;
+  for(let ci=0; ci<checks.length; ci++) {
+    const ch = checks[ci];
+    if(caught) break;
+
+    if(ch.roa) {
+      // RPKI check
+      const pass = ch.roa.pass;
+      const ns = {};
+      Object.keys(NODES).forEach(k=>ns[k]='dim');
+      ns[path[n-1]] = pass?'verified-ok':'attacked';
+      steps.push({
+        desc: pass?`RPKI ✓ Origin matches ROA`:`RPKI ✗ Origin mismatch!`,
+        logs:[
+          {t:'check', m:`ROA lookup: 10.7.0.0/20 → expected AS7`},
+          {t:'check', m:`Claimed origin: ${ch.roa.claimed}`},
+          pass
+            ? {t:'success',m:`✓ ${ch.roa.claimed} === AS7  →  ROA Valid`}
+            : {t:'fail',   m:`✗ ${ch.roa.claimed} ≠ AS7    →  ROA Invalid! Route REJECTED`},
+        ],
+        nodes:ns,
+        pathStates: path.map((_,i)=>i===n-1?(pass?'ok':'fail'):'normal'),
+        ghostShow: sc.attack?sc.attack.ghostEdges:[],
+        roaCheck:{claimed:ch.roa.claimed, pass},
+        result: pass?'pending':(sc.attack?'detected':'pending'),
+      });
+      if(!pass) caught=true;
+    }
+    else if(ch.edge) {
+      // Hop adjacency check
+      const [a,b] = ch.edge;
+      const pass = ch.pass;
+      const ns = {};
+      Object.keys(NODES).forEach(k=>ns[k]='dim');
+      path.forEach((as,i)=>{ ns[as]=i===0?'receiver':i===n-1?'origin':'active'; });
+      ns[a] = pass?'verified-ok':'attacked';
+      ns[b] = pass?'verified-ok':'attacked';
+      // Mark previous ok edges
+      for(let j=0;j<ci;j++){
+        if(checks[j].edge){ns[checks[j].edge[0]]='verified-ok';ns[checks[j].edge[1]]='verified-ok';}
+      }
+      steps.push({
+        desc: pass?`✓ ${a} ↔ ${b} adjacent`:`✗ ${a} ↔ ${b} NOT adjacent — TAMPERED`,
+        logs:[
+          {t:'check', m:`Verifying adjacency: ${a} ↔ ${b}`},
+          pass
+            ? {t:'success',m:`✓ ${a} ↔ ${b} are topological neighbours  →  Valid`}
+            : {t:'fail',   m:`✗ ${a} ↔ ${b} have NO direct link!  →  Route REJECTED`},
+        ],
+        nodes:ns,
+        pathStates: path.map(as=>{
+          if(as===a||as===b)return pass?'ok':'fail';
+          for(let j=0;j<ci;j++){ if(checks[j].edge&&(checks[j].edge[0]===as||checks[j].edge[1]===as))return'ok'; }
+          return'normal';
+        }),
+        checkEdge:{edge:ch.edge,pass},
+        prevOkEdges: checks.slice(0,ci).filter(c=>c.edge).map(c=>c.edge),
+        ghostShow: sc.attack?sc.attack.ghostEdges:[],
+        result: pass?'pending':(sc.attack?'detected':'pending'),
+      });
+      if(!pass) caught=true;
+    }
+    else if(ch.anomaly) {
+      const pass = ch.anomaly.pass;
+      const isFinal = ci === checks.length-1;
+      steps.push({
+        desc: isFinal?(pass?`Anomaly score OK`:`Anomaly score exceeds threshold!`):ch.anomaly.signal,
+        logs:[
+          {t:'check', m:ch.anomaly.signal},
+          isFinal
+            ? (pass?{t:'success',m:`Score ${ch.anomaly.score} ≤ 0.50  →  Accepted`}
+                   :{t:'fail',  m:`Score ${ch.anomaly.score} > 0.50  →  REJECTED`})
+            : (pass?{t:'success',m:`Signal OK → score: ${ch.anomaly.score}`}
+                   :{t:'fail',  m:`Signal FIRES → score: ${ch.anomaly.score}`}),
+        ],
+        nodes: (() => {
+          const ns={};
+          Object.keys(NODES).forEach(k=>ns[k]='dim');
+          path.forEach((as,i)=>ns[as]=i===0?'receiver':i===n-1?'origin':'active');
+          if(isFinal&&!pass) path.forEach(as=>ns[as]='attacked');
+          if(isFinal&&pass)  path.forEach(as=>{ ns[as]=as===path[0]?'receiver':as===path[n-1]?'origin':'verified-ok'; });
+          return ns;
+        })(),
+        pathStates: path.map((_,i)=>{
+          if(!isFinal)return i===0?'receiver':i===n-1?'origin':'on-path';
+          if(pass)return i===0?'receiver':i===n-1?'origin':'ok';
+          return'fail';
+        }),
+        ghostShow: sc.attack?sc.attack.ghostEdges:[],
+        result: isFinal?(pass?'legit':(sc.attack?'detected':'pending')):'pending',
+      });
+      if(isFinal&&!pass) caught=true;
+    }
+  }
+
+  // ── Verdict
+  const verdictResult = sc.attack?(caught?'detected':'missed'):'legit';
+  const verdictMsg = verdictResult==='detected'?'🔴 ATTACK DETECTED — Route rejected'
+                   : verdictResult==='missed'?'🟡 ATTACK MISSED — Route accepted (false negative)'
+                   : '🟢 Legitimate route — Accepted';
+  const ns2={};
+  Object.keys(NODES).forEach(k=>ns2[k]='dim');
+  path.forEach((as,i)=>{
+    ns2[as] = verdictResult==='missed'?'active'
+            : verdictResult==='legit'?'verified-ok'
+            : (i===0?'receiver':i===n-1?'attacked':'attacked');
+  });
+  steps.push({
+    desc: verdictMsg,
+    logs:[
+      {t:'dim',m:'─────────────────────────'},
+      {t:verdictResult==='legit'?'success':verdictResult==='detected'?'success':'fail', m:verdictMsg},
+      {t:'dim',m:`Validator: ${VALIDATOR_META[vKey].name}  |  Cost: ${VALIDATOR_META[vKey].cost}`},
+    ],
+    nodes:ns2,
+    pathStates: path.map((_,i)=>verdictResult==='missed'?'on-path':verdictResult==='legit'?'ok':(i===0?'receiver':'fail')),
+    ghostShow: sc.attack?sc.attack.ghostEdges:[],
+    result: verdictResult,
+  });
+
+  return steps;
+}
+
+// ── Renderer ──────────────────────────────────────────────────────────────────
+const NODE_STYLES = {
+  normal:     {fill:'#0f1921', stroke:'inherit', filter:'none', label:'#8b949e'},
+  dim:        {fill:'#0d1117', stroke:'#21262d', filter:'none', label:'#30363d'},
+  active:     {fill:'#0c1f3d', stroke:'#388bfd', filter:'drop-shadow(0 0 4px #388bfd)', label:'#388bfd'},
+  origin:     {fill:'#0e2a1b', stroke:'#3fb950', filter:'drop-shadow(0 0 5px #3fb950)', label:'#3fb950'},
+  receiver:   {fill:'#1e1040', stroke:'#a371f7', filter:'drop-shadow(0 0 5px #a371f7)', label:'#a371f7'},
+  attacked:   {fill:'#2e1212', stroke:'#f85149', filter:'drop-shadow(0 0 6px #f85149)', label:'#f85149'},
+  'verified-ok':{fill:'#0e2a1b', stroke:'#3fb950', filter:'drop-shadow(0 0 5px #3fb950)', label:'#3fb950'},
+  'checked':  {fill:'#2a1e00', stroke:'#d29922', filter:'drop-shadow(0 0 5px #d29922)', label:'#d29922'},
+};
+
+function applyStep(s) {
+  // Nodes
+  Object.entries(s.nodes||{}).forEach(([as, state])=>{
+    const g = document.getElementById('n-'+as);
+    if(!g) return;
+    const st = NODE_STYLES[state] || NODE_STYLES.normal;
+    const circle = g.querySelector('circle');
+    const label = g.querySelector('.node-label');
+    if(circle) {
+      circle.style.fill = st.fill;
+      circle.style.filter = st.filter;
+      if(state!=='normal') circle.style.stroke = st.stroke;
+      else circle.style.stroke = '';
+    }
+    if(label) label.style.fill = st.label;
+  });
+
+  // All edges reset
+  EDGE_ORDER.forEach(k=>{
+    const el = document.getElementById('e-'+k);
+    if(el) { el.className.baseVal = 'edge' + (k.startsWith('AS1-AS2')?' tier1':''); el.style.strokeDasharray=''; }
+  });
+
+  // Highlight active route edges
+  (s.activeEdges||[]).forEach(([a,b])=>{
+    const el = getEdgeEl(a,b);
+    if(el) { const d=document.getElementById(el); if(d) d.classList.add('active'); }
+  });
+
+  // Validation edge highlights
+  if(s.checkEdge) {
+    const [a,b] = s.checkEdge.edge;
+    const el = document.getElementById(getEdgeEl(a,b)) || getGhostEl(a,b);
+    if(el) el.classList.add(s.checkEdge.pass?'ok-e':'fail-e');
+  }
+  (s.prevOkEdges||[]).forEach(([a,b])=>{
+    const el = document.getElementById(getEdgeEl(a,b)) || getGhostEl(a,b);
+    if(el) el.classList.add('ok-e');
+  });
+
+  // Ghost edges
+  document.querySelectorAll('.edge.ghost').forEach(el=>el.style.display='none');
+  (s.ghostShow||[]).forEach(([a,b])=>{
+    const el = getGhostEl(a,b);
+    if(el) el.style.display='';
+  });
+
+  // Path display
+  const pd = document.getElementById('path-display');
+  const sc = SCENARIOS[document.getElementById('sel-scenario').value];
+  const path = sc.path;
+  pd.innerHTML = '';
+  path.forEach((as,i)=>{
+    const span = document.createElement('span');
+    span.className = 'pas ' + (s.pathStates?.[i]||'normal');
+    span.textContent = as;
+    pd.appendChild(span);
+    if(i < path.length-1){
+      const arr = document.createElement('span');
+      arr.className='pa-arrow'; arr.textContent='←';
+      pd.appendChild(arr);
+    }
+  });
+
+  // ROA box
+  const roaRect = document.getElementById('roa-rect');
+  if(s.roaCheck) {
+    roaRect.style.stroke = s.roaCheck.pass ? '#3fb950' : '#f85149';
+    document.getElementById('roa-content').style.fill = s.roaCheck.pass ? '#3fb950' : '#f85149';
+  } else {
+    roaRect.style.stroke = '';
+    document.getElementById('roa-content').style.fill = '#8b949e';
+  }
+
+  // Step description
+  document.getElementById('step-desc').textContent = s.desc;
+
+  // Result badge
+  const rb = document.getElementById('result-badge');
+  rb.className = 'result-badge ' + (s.result==='detected'?'detected':s.result==='missed'?'missed':s.result==='legit'?'legit':'pending');
+  rb.textContent = s.result==='detected'?'🔴 ATTACK DETECTED'
+                 : s.result==='missed'?'🟡 ATTACK MISSED (false negative)'
+                 : s.result==='legit'?'🟢 Legitimate — Accepted'
+                 : '⏳ Validating…';
+
+  // Log
+  (s.logs||[]).forEach(({t,m})=>{
+    const div = document.createElement('div');
+    div.className = 'log-line '+t;
+    div.innerHTML = `<span class="bul">›</span><span class="msg">${m}</span>`;
+    document.getElementById('log-area').appendChild(div);
+  });
+  const la = document.getElementById('log-area');
+  la.scrollTop = la.scrollHeight;
+
+  // Step counter
+  document.getElementById('step-counter').textContent = `${curStep+1} / ${steps.length}`;
+
+  // Buttons
+  document.getElementById('btn-back').disabled = curStep <= 0;
+  document.getElementById('btn-step').disabled = curStep >= steps.length-1;
+}
+
+function resetVisuals() {
+  EDGE_ORDER.forEach(k=>{
+    const el=document.getElementById('e-'+k);
+    if(el){el.className.baseVal='edge'+(k==='AS1-AS2'?' tier1':'');el.style.stroke='';}
+  });
+  document.querySelectorAll('.edge.ghost').forEach(el=>el.style.display='none');
+  Object.keys(NODES).forEach(as=>{
+    const g=document.getElementById('n-'+as); if(!g)return;
+    const c=g.querySelector('circle'); const l=g.querySelector('.node-label');
+    if(c){c.style.fill='';c.style.stroke='';c.style.filter='';}
+    if(l)l.style.fill='';
+  });
+  document.getElementById('roa-rect').style.stroke='';
+  document.getElementById('roa-content').style.fill='#8b949e';
+  document.getElementById('result-badge').className='result-badge pending';
+  document.getElementById('result-badge').textContent='⏳ Awaiting simulation…';
+  document.getElementById('log-area').innerHTML='';
+  document.getElementById('path-display').innerHTML='<span class="pas" style="color:var(--muted)">—</span>';
+  document.getElementById('step-counter').textContent='0 / 0';
+  document.getElementById('step-desc').textContent='Select a scenario and validator, then press Play';
+}
+
+function initSim() {
+  stopPlay();
+  const scKey = document.getElementById('sel-scenario').value;
+  const vKey  = document.getElementById('sel-validator').value;
+  steps = buildSteps(scKey, vKey);
+  curStep = -1;
+  resetVisuals();
+  updateCompare(scKey);
+  document.getElementById('step-counter').textContent = `0 / ${steps.length}`;
+  document.getElementById('btn-back').disabled = true;
+  document.getElementById('btn-step').disabled = false;
+}
+
+function stepForward() {
+  if(curStep < steps.length-1) {
+    curStep++;
+    applyStep(steps[curStep]);
+  }
+}
+function stepBack() {
+  if(curStep > 0) {
+    curStep--;
+    document.getElementById('log-area').innerHTML='';
+    // Re-apply from start up to curStep
+    for(let i=0;i<=curStep;i++) {
+      (steps[i].logs||[]).forEach(({t,m})=>{
+        const d=document.createElement('div'); d.className='log-line '+t;
+        d.innerHTML=`<span class="bul">›</span><span class="msg">${m}</span>`;
+        document.getElementById('log-area').appendChild(d);
+      });
+    }
+    document.getElementById('log-area').scrollTop=document.getElementById('log-area').scrollHeight;
+    applyStep(steps[curStep]);
+  }
+}
+
+function startPlay() {
+  playing = true;
+  document.getElementById('btn-play').textContent = '⏸ Pause';
+  document.getElementById('btn-play').classList.remove('primary');
+  function next() {
+    if(!playing || curStep >= steps.length-1) { stopPlay(); return; }
+    stepForward();
+    const delay = parseInt(document.getElementById('sel-speed').value);
+    playTimer = setTimeout(next, delay);
+  }
+  const delay = parseInt(document.getElementById('sel-speed').value);
+  playTimer = setTimeout(next, delay);
+}
+function stopPlay() {
+  playing = false;
+  clearTimeout(playTimer);
+  document.getElementById('btn-play').textContent = '▶ Play';
+  document.getElementById('btn-play').classList.add('primary');
+}
+
+function updateCompare(scKey) {
+  const grid = document.getElementById('cmp-grid');
+  const VALIDATORS_ORDER = ['rpki','origin_only','orig_1st_last','bgpsec','anomaly'];
+  const LABELS = ['RPKI','Orig Only','Orig+1+L','BGPsec','Anomaly'];
+  const det = DETECTION[scKey];
+  grid.innerHTML = '';
+  VALIDATORS_ORDER.forEach((vk,i)=>{
+    const r = det[vk];
+    const cls = r==='det'?'det':r==='miss'?'mis':r==='pass'?'pas-v':'';
+    const label = r==='det'?'CAUGHT':r==='miss'?'MISSED':r==='pass'?'PASS':'—';
+    const div = document.createElement('div');
+    div.className='cmp '+cls;
+    div.innerHTML=`<div class="cn">${LABELS[i]}</div><div class="cv">${label}</div>`;
+    grid.appendChild(div);
+  });
+  // Cost comparison cell
+  const vKey = document.getElementById('sel-validator').value;
+  const meta = VALIDATOR_META[vKey];
+  const div2=document.createElement('div'); div2.className='cmp';
+  div2.innerHTML=`<div class="cn">Active cost</div><div class="cv" style="color:var(--yellow)">${meta.cost}</div>`;
+  grid.appendChild(div2);
+}
+
+// ── Wire up controls ──────────────────────────────────────────────────────────
+document.getElementById('btn-play').addEventListener('click',()=>{
+  if(steps.length===0) { initSim(); setTimeout(startPlay, 50); return; }
+  if(playing) stopPlay(); else {
+    if(curStep>=steps.length-1){initSim();setTimeout(startPlay,50);}
+    else startPlay();
+  }
+});
+document.getElementById('btn-step').addEventListener('click',()=>{
+  if(steps.length===0){initSim();return;}
+  if(playing) stopPlay();
+  stepForward();
+});
+document.getElementById('btn-back').addEventListener('click',()=>{
+  if(playing) stopPlay();
+  stepBack();
+});
+document.getElementById('btn-reset').addEventListener('click',()=>{
+  stopPlay(); steps=[]; curStep=-1; resetVisuals();
+  updateCompare(document.getElementById('sel-scenario').value);
+});
+document.getElementById('sel-scenario').addEventListener('change',()=>{
+  stopPlay(); steps=[]; curStep=-1; resetVisuals();
+  updateCompare(document.getElementById('sel-scenario').value);
+});
+document.getElementById('sel-validator').addEventListener('change',()=>{
+  stopPlay(); steps=[]; curStep=-1; resetVisuals();
+  updateCompare(document.getElementById('sel-scenario').value);
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+updateCompare('legit');
+document.getElementById('btn-back').disabled=true;
+document.getElementById('btn-step').disabled=false;
+</script>
+</body>
+</html>
