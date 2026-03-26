@@ -1,0 +1,15 @@
+validator,origin_hijack,path_fabrication,path_shortening,route_leak_type1_full_prefix,route_leak_type2_lateral,route_leak_type3_intentional
+RPKI,0.2,0.0,0.0,0.0,0.0,0.0
+Selective: Origin Only,0.8,0.0,1.0,0.0,0.0,0.2
+Origin + 1st Hop,0.8,0.7778,1.0,0.0,0.0,0.2
+Origin + Last Hop,0.8,0.8889,1.0,0.0,0.0,0.2
+Origin + 1st + Last,0.8,1.0,1.0,0.0,0.0,0.2
+Origin + 2 Hops + Last,0.8,1.0,1.0,0.0,0.0,0.2
+BGPsec (Full Path),0.8,1.0,1.0,0.0,0.0,0.2
+Anomaly Detector,0.8667,0.6667,0.0,0.6667,1.0,0.2
+Delta Trust,0.8,1.0,1.0,0.0,0.0,0.2
+ASPA (50%),0.8,1.0,1.0,0.0,0.0,0.2
+OTC (50%),0.0,0.0,0.0,1.0,1.0,1.0
+GNN Anomaly Detector,0.8667,1.0,1.0,1.0,1.0,1.0
+Selective + Anomaly,0.8667,1.0,1.0,0.6667,1.0,0.4
+Path Plausibility,0.8667,1.0,1.0,0.8333,0.3333,1.0

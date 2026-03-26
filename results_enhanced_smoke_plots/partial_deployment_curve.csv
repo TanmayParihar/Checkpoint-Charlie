@@ -1,0 +1,16 @@
+coverage,validator,detection_rate
+0.05,RPKI,0.0
+0.05,ASPA,0.6
+0.05,OTC,0.35
+0.25,RPKI,0.05
+0.25,ASPA,0.6
+0.25,OTC,0.35
+0.5,RPKI,0.05
+0.5,ASPA,0.6
+0.5,OTC,0.35
+0.75,RPKI,0.1
+0.75,ASPA,0.6
+0.75,OTC,0.35
+1.0,RPKI,0.1
+1.0,ASPA,0.6
+1.0,OTC,0.35

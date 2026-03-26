@@ -1,0 +1,9 @@
+scenario,detection_rate,false_positive_rate,avg_time_ms
+All signals,0.9,0.01,4.223
+No anomaly,0.85,0.0,4.1714166666666666
+No aspa,0.95,0.01,4.194916666666667
+No delta,0.9,0.0,3.0324166666666668
+No gnn,0.7,0.0,2.7225833333333336
+No otc,0.8,0.0,4.207083333333333
+No rpki,0.95,0.01,4.013583333333333
+No selective,0.95,0.0,3.004

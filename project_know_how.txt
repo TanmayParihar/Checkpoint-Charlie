@@ -1,0 +1,483 @@
+Checkpoint Charlie Project Know-How (Full Technical Walkthrough)
+Date: 2026-03-25
+Repository root: G:\Checkpoint-Charlie\Checkpoint-Charlie
+
+====================================================================
+1) What this project is doing
+====================================================================
+This project is a BGP security simulation and benchmarking framework.
+It compares multiple route validation strategies across:
+
+- Detection quality (how many attacks are caught)
+- False positives (how many legitimate routes are wrongly rejected)
+- Processing cost (modeled milliseconds per route)
+- Security-cost ratio (detection_rate / avg_time_ms)
+
+The project started with baseline BGP defenses and evolved into an enhanced
+pipeline that includes:
+
+- RPKI origin validation
+- Selective hop path validation
+- BGPsec full path validation
+- Statistical anomaly detection
+- Delta Trust (incremental trust cache)
+- ASPA validator
+- OTC leak detector
+- GNN-based anomaly detector
+- Path plausibility signal-fusion engine
+- Route leak attack modeling
+
+There are also two standalone HTML visual simulators that animate route
+propagation and per-validator detection logic step by step.
+
+
+====================================================================
+2) Project evolution and entry points
+====================================================================
+This codebase has 4 main runners representing project evolution:
+
+1. main.py
+   Baseline simulation:
+   - RPKI
+   - Selective hop variants
+   - BGPsec
+   - Statistical anomaly detector
+   - Composite "Selective + Anomaly"
+
+2. delta_main.py
+   Adds Delta Trust validator to baseline.
+
+3. delta_combined_main.py
+   Adds triple composite:
+   - Delta + Selective + Anomaly
+
+4. enhanced_main.py
+   Final expanded benchmark:
+   - Adds ASPA, OTC, GNN, Path Plausibility
+   - Adds route leak attacks
+   - Adds ASPA sweep, partial deployment curves, fusion ablation, ROC
+   - Saves enhanced plots and CSVs
+
+
+====================================================================
+3) End-to-end simulation flow (enhanced_main.py)
+====================================================================
+The final pipeline in enhanced_main.py runs this sequence:
+
+Step 1: Build AS topology
+- Class: src/topology.py -> ASTopology
+- Generates synthetic internet-like graph and AS relationships.
+
+Step 2: Generate legitimate routes
+- Class: src/bgp_simulator.py -> BGPSimulator
+- Generates normal BGP announcements.
+
+Step 3: Inject attacks
+- Classic attacks: src/attack_injector.py
+  - origin_hijack
+  - path_shortening
+  - path_fabrication
+- Route leak attacks: src/attacks/route_leak.py
+  - route_leak_type1_full_prefix
+  - route_leak_type2_lateral
+  - route_leak_type3_intentional
+- Mix and shuffle traffic.
+
+Step 4: Train anomaly models
+- Statistical anomaly detector (AnomalyDetector)
+- GNN anomaly detector (GNNAnomalyDetector)
+
+Step 5: Build validators
+- Baseline + new validators + composite validators.
+
+Step 6: Evaluate validators
+- Class: src/evaluator.py -> Evaluator
+- Produces summary table and attack-type breakdown.
+
+Step 7: Enhanced analyses
+- ASPA coverage sweep
+- Partial deployment curves
+- Fusion signal ablation
+- ROC curve data
+- Route leak heatmap data
+
+Step 8: Save outputs
+- CSV artifacts and PNG figures in results directory.
+
+
+====================================================================
+4) Core simulation model details
+====================================================================
+4.1 Topology model (src/topology.py)
+- Graph model: Barabasi-Albert preferential attachment.
+- Default size from config.py:
+  - NUM_ASES = 2000
+  - TIER1_COUNT = 15
+  - TIER2_COUNT = 300
+  - remainder = Tier-3
+- Relationships stored as directed values:
+  - PROVIDER = -1
+  - PEER = 0
+  - CUSTOMER = 1
+- Assigns prefixes per AS (1 to 5 prefixes per AS).
+- Builds ROA DB according to RPKI coverage ratio.
+- Supports valley-free check via is_valley_free(as_path).
+
+4.2 Route model (src/bgp_simulator.py)
+- Route object: BGPRoute
+  - prefix
+  - origin_as
+  - as_path
+  - is_attack
+  - attack_type
+  - attacker_as
+- Critical path convention used across project:
+  as_path = [receiver_peer, ..., intermediate_hops, ..., origin]
+  so:
+  - as_path[0] is receiving peer side
+  - as_path[-1] is origin
+- Normal routes are generated from topology shortest paths with path length
+  filters (must be between 2 and 8 hops).
+
+4.3 Attack model
+- Classic attack injector (src/attack_injector.py):
+  - origin_hijack:
+    replace origin AS with attacker AS
+  - path_shortening:
+    remove middle hops
+  - path_fabrication:
+    insert fake AS hops
+- Route leak injector (src/attacks/route_leak.py):
+  - Type1 full-prefix leak
+  - Type2 lateral leak
+  - Type3 intentional strategic leak
+  - attaches metadata like otc_present and leak_subtype
+
+
+====================================================================
+5) Validator internals
+====================================================================
+5.1 RPKI validator (src/validators/rpki.py)
+- Checks prefix -> authorized origin mapping from ROA DB.
+- If no ROA exists, route is accepted (NotFound behavior).
+- Detects origin mismatch only.
+
+5.2 Selective hop validator (src/validators/selective_hop.py)
+- Verifies only selected adjacency positions in AS_PATH.
+- Uses topology adjacency check for selected hop pairs.
+- positions=None means verify full path (BGPsec behavior).
+
+5.3 BGPsec validator (src/validators/bgpsec.py)
+- Wrapper over selective validator with full-path checks.
+
+5.4 Statistical anomaly detector (src/validators/anomaly.py)
+- Trains on normal routes.
+- Signals:
+  - path length z-score
+  - origin consistency for prefix
+  - valley-free violation
+  - new AS appearance
+  - AS loop/repetition
+- Weighted score > threshold means reject.
+
+5.5 Delta Trust validator (src/validators/delta_trust.py)
+- Caches verified edges per prefix.
+- On new route for same prefix, verifies only changed edges (diff),
+  not full path.
+- Objective: lower cost while keeping strong detection.
+
+5.6 ASPA validator (src/validators/aspa.py)
+- Builds customer -> authorized provider sets for covered ASes.
+- Tri-state check:
+  - valid
+  - invalid
+  - unknown
+- Boolean contract:
+  - invalid -> reject
+  - valid/unknown -> accept
+- Supports partial deployment coverage parameter.
+
+5.7 OTC validator (src/validators/otc.py)
+- RFC 9234 inspired leak signal logic.
+- Tri-state check:
+  - valid / invalid / unknown
+- Key rule:
+  if OTC signal is present and learned from customer side, flag as leak.
+- Supports partial adoption rate.
+
+5.8 GNN anomaly detector (src/validators/gnn_anomaly.py)
+- Topology-aware message passing embedding model.
+- Builds node features from degree, tier, route history, prefix diversity.
+- Uses 2 propagation rounds to form embeddings.
+- Produces anomaly score in [0,1].
+- Threshold calibrated from normal traffic quantile.
+- Engine auto-selects torch if available, else cpu.
+
+5.9 Path plausibility fusion (src/validators/path_plausibility.py)
+- Fuses multiple signals:
+  - rpki, aspa, otc, selective, anomaly, gnn, delta
+- Converts each signal to plausibility probability.
+- Combines with weighted odds product (Bayesian-style fusion).
+- Outputs:
+  - score in [0,1]
+  - verdict: accept / suspect / reject
+- validate() maps verdict to accept/reject decision.
+
+5.10 Composite validator
+- "Selective + Anomaly" class in runner scripts:
+  route is accepted only if both component validators accept.
+
+
+====================================================================
+6) Metrics and evaluation math
+====================================================================
+Evaluator implementation: src/evaluator.py
+
+For each validator:
+- n_attacks: number of attack routes
+- n_legit: number of legitimate routes
+- n_detected: attacks rejected
+- n_fp: legitimate routes rejected
+
+Metrics:
+- detection_rate = n_detected / n_attacks
+- false_positive_rate = n_fp / n_legit
+- avg_time_ms = mean(processing_time_ms over all routes)
+- total_time_ms = sum(processing_time_ms over all routes)
+- security_cost_ratio = detection_rate / avg_time_ms
+
+Important:
+- Processing time is modeled, not wall-clock latency.
+- Config constants:
+  - CRYPTO_VERIFY_MS = 0.50
+  - HASH_LOOKUP_MS = 0.01
+- These are relative comparison costs, not deployment SLA timings.
+
+
+====================================================================
+7) Why results are not hardcoded
+====================================================================
+The outputs are computed from simulation state, not static literals.
+
+Evidence in code:
+- src/evaluator.py computes metrics from route-level decisions and counts.
+- Attack routes are generated dynamically by injectors.
+- Topology and route samples are generated with random seeds.
+- Validator decisions are made from route content and topology relations.
+
+Practical proof method:
+1. Run same config twice with same seed -> same output (reproducible).
+2. Change seed or attack-rate -> changed summary numbers.
+3. Search source for exact output values -> values are absent as fixed constants.
+
+Existing proof result folders in repo:
+- results_proof_seed42_a
+- results_proof_seed42_b
+- results_proof_seed99
+- results_proof_seed42_attack35
+- results_proof_aspa05
+- results_proof_aspa100
+
+These folders demonstrate outputs varying with experimental settings.
+
+
+====================================================================
+8) HTML simulators (important for presentation)
+====================================================================
+Files:
+- bgp_sim.html
+- bgp_sim2.html
+
+Both are self-contained front-end demos (HTML+CSS+JS) that visually explain
+how route validation works scenario by scenario.
+
+8.1 Shared JS architecture
+- SCENARIOS:
+  defines route path and attack context.
+- VSETS:
+  defines per-validator ordered check steps for each scenario.
+- DETECTION:
+  defines expected outcome matrix (pass/det/miss).
+- VALIDATOR_META:
+  includes model cost and security-cost ratio labels.
+- buildSteps(scKey, vKey):
+  constructs step timeline for selected scenario+validator.
+- applyStep(step):
+  updates SVG nodes/edges/path strip/log panel/result badge.
+- updateCompare(scKey):
+  updates grid showing all validators for scenario.
+- controls:
+  Play, Step, Back, Reset, scenario select, validator select, speed select.
+
+8.2 bgp_sim.html
+- 10-node topology demo.
+- Prefix shown in ROA panel: 10.7.0.0/20 -> AS7.
+- Scenarios:
+  - legitimate
+  - origin hijack
+  - path shortening
+  - path fabrication
+- Shows ghost edges for forged links.
+
+8.3 bgp_sim2.html
+- Expanded 15-node topology demo.
+- Prefix shown in ROA panel: 10.14.0.0/20 -> AS14.
+- Same scenario classes, but richer topology and narration.
+- Uses dynamic compare grid plus active cost panel.
+
+8.4 What these HTML simulations are for
+- They are explanatory/teaching visualizations.
+- They are not the computation engine for CSV metrics.
+- The authoritative benchmarking pipeline is the Python code.
+
+
+====================================================================
+9) Current enhanced output snapshot (results_enhanced/summary.csv)
+====================================================================
+Current measured summary in repository:
+
+- RPKI: detection 0.1197, FPR 0.0000, avg_time_ms 0.238225, SCR 0.5023
+- Selective: Origin Only: detection 0.3950, FPR 0.0000, avg_time_ms 0.500000, SCR 0.7900
+- Origin + 1st Hop: detection 0.5520, FPR 0.0000, avg_time_ms 0.996475, SCR 0.5540
+- Origin + Last Hop: detection 0.5393, FPR 0.0000, avg_time_ms 0.996475, SCR 0.5412
+- Origin + 1st + Last: detection 0.6387, FPR 0.0000, avg_time_ms 1.467800, SCR 0.4351
+- Origin + 2 Hops + Last: detection 0.6787, FPR 0.0000, avg_time_ms 1.793250, SCR 0.3785
+- BGPsec (Full Path): detection 0.6863, FPR 0.0000, avg_time_ms 1.890975, SCR 0.3630
+- Anomaly Detector: detection 0.6797, FPR 0.0016, avg_time_ms 0.050000, SCR 13.5933
+- Delta Trust: detection 0.6863, FPR 0.0000, avg_time_ms 1.523775, SCR 0.4504
+- ASPA (50%): detection 0.6863, FPR 0.0000, avg_time_ms 0.038142, SCR 17.9944
+- OTC (50%): detection 0.3497, FPR 0.0000, avg_time_ms 0.015870, SCR 22.0332
+- GNN Anomaly Detector: detection 0.2457, FPR 0.0300, avg_time_ms 1.500000, SCR 0.1638
+- Selective + Anomaly: detection 0.8520, FPR 0.0016, avg_time_ms 1.517800, SCR 0.5613
+- Path Plausibility: detection 0.7547, FPR 0.0000, avg_time_ms 4.843812, SCR 0.1558
+
+Attack-type breakdown is in:
+- results_enhanced/attack_breakdown.csv
+
+
+====================================================================
+10) Files and outputs to remember for viva
+====================================================================
+Core code:
+- main.py
+- delta_main.py
+- delta_combined_main.py
+- enhanced_main.py
+
+Core modules:
+- src/topology.py
+- src/bgp_simulator.py
+- src/attack_injector.py
+- src/attacks/route_leak.py
+- src/evaluator.py
+- src/visualization.py
+- src/enhanced_visualization.py
+
+Validators:
+- src/validators/rpki.py
+- src/validators/selective_hop.py
+- src/validators/bgpsec.py
+- src/validators/anomaly.py
+- src/validators/delta_trust.py
+- src/validators/aspa.py
+- src/validators/otc.py
+- src/validators/gnn_anomaly.py
+- src/validators/path_plausibility.py
+
+Outputs:
+- results/
+- results_delta/
+- results_delta_combined/
+- results_enhanced/
+
+Proof folders:
+- results_proof_*
+
+Report files:
+- synopsiscode.tex (initial synopsis)
+- final_report_ieee.tex (final report)
+
+HTML demos:
+- bgp_sim.html
+- bgp_sim2.html
+
+
+====================================================================
+11) How to run (quick command set)
+====================================================================
+Install baseline dependencies:
+  pip install -r requirements.txt
+
+Install enhanced dependencies:
+  pip install -r requirements_enhanced.txt
+
+Run baseline:
+  python main.py
+
+Run delta benchmark:
+  python delta_main.py
+
+Run combined delta benchmark:
+  python delta_combined_main.py
+
+Run enhanced benchmark:
+  python enhanced_main.py
+
+Run enhanced benchmark without plots:
+  python enhanced_main.py --no-plots
+
+Key knobs:
+- --ases
+- --routes
+- --attack-rate
+- --rpki-cov
+- --aspa-cov
+- --otc-cov
+- --route-leak-share
+- --seed
+- --results-dir
+
+
+====================================================================
+12) Assumptions and limitations (be transparent in presentation)
+====================================================================
+- Processing times are modeled constants, not measured packet processing time.
+- Synthetic topology is used by default (not live internet feed).
+- Data downloader exists (data/download_data.py) but main flow currently uses
+  synthetic topology unless integrated further.
+- HTML simulators are pedagogical demos with scripted check sequences.
+- Some advanced modules (especially GNN and fusion) are framework-level
+  implementations and should be treated as simulation research prototypes.
+
+
+====================================================================
+13) Suggested presentation narrative (2-3 minutes)
+====================================================================
+1. Problem:
+   BGP attacks include origin hijacks, path manipulations, and route leaks.
+   Existing defenses alone have blind spots or high cost.
+
+2. Our approach:
+   Build a controlled simulation framework to compare many defenses under the
+   same traffic and topology conditions.
+
+3. Innovation:
+   Add ASPA, OTC, route-leak modeling, GNN anomaly detection, and multi-signal
+   path plausibility fusion, while keeping baseline methods for fair comparison.
+
+4. Evaluation:
+   We compute detection, FPR, modeled time, and security-cost ratio per
+   validator across mixed legitimate/attack traffic.
+
+5. Result:
+   Different validators dominate different tradeoffs:
+   - Composite methods improve detection
+   - Lightweight checks can be highly cost-efficient
+   - Full path methods maximize structural certainty at higher cost
+
+6. Explainability:
+   HTML simulators animate exactly why each validator catches or misses each
+   attack type.
+
+
+End of document.

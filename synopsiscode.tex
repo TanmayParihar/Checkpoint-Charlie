@@ -1,0 +1,165 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Checkpoint Charlie: Strategic Techniques for BGP Path Security}
+
+\author{
+\IEEEauthorblockN{Tanmay Parihar}
+\IEEEauthorblockA{\textit{School of Electrical Engineering} \\
+\textit{Manipal Institute of Technology}\\
+Manipal, India \\
+tanmay4.mitmpl2023@learner.manipal.edu}
+\and
+\IEEEauthorblockN{Ayush Shetty}
+\IEEEauthorblockA{\textit{School of Electrical Engineering} \\
+\textit{Manipal Institute of Technology}\\
+Manipal, India \\
+ayush14.mitmpl2023@learner.manipal.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+Border Gateway Protocol (BGP) is severely exposed in the Internet architecture of the world. The current countermeasures are divided into two categories: the Resource Public Key Infrastructure (RPKI), which provides lightweight validation of origin, but does not support the detection of path manipulation, and BGPsec, which provides end-to-end validation of paths, but is not deployed widely due to the prohibitive computation costs. This paper explores intermediate path validation schemes in two practical directions: selective hop validation which only validates critical positions in the AS path and statistical anomaly detection which is based on past AS-PATH patterns. Through the analysis of simulation, we will describe the trade-off between security and computational cost and prove that it is possible to achieve meaningful security improvements without the full path validation overhead.
+\end{abstract}
+
+\begin{IEEEkeywords}
+security in BGP, path validation, RPI, selective verification, anomaly detection
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+The Internet has over 75 000 autonomous systems (ASes) which control different parts of the network and are operated by diverse entities such as corporations, universities and internet service providers. These ASes use the BGP (Border Gateway Protocol) to make sure that the traffic is directed appropriately between them. The greatest problem with BGP is based on trust: when an AS states that it can reach an IP block, say, 201.0.111.0/24, all other ASs accept the statement as a fact. There are no perfect ways to check the validity of such announcements. The 2008 case of the Pakistani telephone operator Telecom Pakistan hijacking the traffic of YouTube is an example of the constant dangers the Internet has been facing due to the trust-based nature of BGP.
+
+\section{Background and Related Work}
+
+\subsection{BGP Routing Fundamentals}
+
+BGP is based on inter-domain routing by use of path-vector announcements where each AS adds its own AS number to the AS-PATH attribute and routes the path to other ASes. The choice of routes is mainly dependent on the length of AS path and other features that are determined by the value of the AS.
+
+\subsection{Threat Model}
+
+The major threats of BGP are:
+
+a) Origin Hijacking: A rogue AS claims to own addresses space covered by IP addresses which it does not actually control, which redirects traffic away.
+
+b) Path Manipulation: During an intermediate forms or sets path containing information by falsifying path data, thussecurity Empowers man in middle attack or packet analysis.
+
+\subsection{Existing Defense Mechanisms}
+
+\subsubsection{Resource Public Key Infrastructure (RPKI)}
+
+RPKI offers signed Route origin Authorization (ROAs) cryptographically. The coverage of deployment is now between about 40 to 50 percent. Checking only takes one signature per announcement, which means that there is very little computational cost and ASes can check announced sources.
+
+\subsubsection{Border Gateway Protocol Security (BGPsec)}
+
+BGPsec, defined in RFC 8205 (September 2017), is a generalization of BGP that provides the full path validation of the announcements via integrity chains of a signature, each signature being signed as it goes through the AS. Nonetheless, BGPsec is faced with high computational expenses. Every path signature is to be checked; in normal 4-5 hop paths during convergence events that update thousands of paths per second, routers have verification back logs that cause routing delays and packet loss.
+
+\section{Problem Statement}
+
+The research question is simple: Can significant security benefits be attained between origin-only validation (RPKI) and full path validation (BGPsec)? In particular, this paper examines the question of whether it is possible to authenticate the position of the selected paths or use statistical anomaly detection to stop most real-world attacks without compromising computational feasibility and minimizing the cost of router hardware.
+
+\section{Proposed Approach}
+
+This paper discusses two complementary methods that can be used to fill the BGP path-security gap:
+
+\subsection{Selective Hop Verification}
+
+We check the security coverage by checking only critical positions instead of validating all the hops in the AS-PATH. The main hypothesis is that by authenticating the origin and the initial and final hops, one can effectively remove the majority of practical attack vectors and only three signature checks need to be done, independent of the length of the path. The steps involved in methodology are:
+
+\begin{itemize}
+\item Simulation of AS-paths with injection of attacks.
+\item Comparison of detection rates on the use of different validation strategies: no validation, origin only (RPKI-like) and the several options of selective hops.
+\item Which are the positions of hops to provide the best security coverage?
+\item Measuring computational cost in comparison to full path validation.
+\end{itemize}
+
+\subsection{Statistical Anomaly Detection}
+
+We come up with probabilistic detection schemes that issue red flags on suspicious path announcements that are not cryptographically verified. The approach leverages:
+
+\begin{itemize}
+\item BGP routing data-based historical AS-PATH patterns.
+\item AS relationship databases (customer- provider, peer-peer).
+\item topological, and customary path, features.
+\item Rudimentary pattern recognition to detect suspicious announcements.
+\end{itemize}
+
+The statistical techniques do not provide cryptographic assurances, but potentially identify a large proportion of attacks with very little computation, and can be used as a first-line defense measure.
+
+\section{Methodology}
+
+\subsection{Dataset}
+
+We use the simulated AS-paths, as well as publicly provided BGP routing traces to simulate the normal routing behavior and inject different attack scenarios.
+
+\subsection{Attack Scenarios}
+
+Application of frequently occurring attack patterns:
+
+\begin{itemize}
+\item Legitimate and falsified origins hijacking.
+\item Path shortening attacks.
+\item Path fabrication by insertion or deletion of ASes.
+\end{itemize}
+
+\subsection{Evaluation Metrics}
+
+\begin{itemize}
+\item Detection Rate: Fraction of the attacks that are detected.
+\item False Positive Rate: The cases of false flagging ASes.
+\item Processing Overhead: Processing cost per announcement.
+\item Trade-off between coverage and Cost Cooperation between security benefit and verification cost and computational cost.
+\end{itemize}
+
+\subsection{Simulation Framework}
+
+We construct a simulation environment that:
+
+\begin{itemize}
+\item Announces models AS-level topology and routing.
+\item Uses validation techniques- origin only, selective hop or full path.
+\item Imposes statistical rules of detection.
+\item Comparisons between different situations.
+\end{itemize}
+
+\section{Expected Results}
+
+\begin{enumerate}
+\item The selective hop check method - checking only the origin, first, and final hops will be able to identify about 80 percent of path manipulation attacks of any path length.
+\item Approximately 70 percent of the attacks with minimal cryptographic overhead will be detected by statistical anomaly.
+\item A hybrid of the two methods can be used to provide an approximation of the security provided by BGPsec and still incur less computational expenses.
+\end{enumerate}
+
+\section{Limitations and Future Work}
+
+The current research is limited to simulations and not hardware implementation. Since the work has been tested on no real Cisco or Juniper routers, the results represent theoretical possible performance and not real deployment performance. Future research may examine:
+
+\begin{itemize}
+\item Support of real router hardware.
+\item Live BGP feed testing at scale.
+\item Higher cryptography Proofs which encode multiplex definition hopping into one definite proof.
+\end{itemize}
+
+\section{Conclusion}
+
+The internet is basically insecure when it comes to routing system based on BGP. No one is actually using BGPsec, which is considered the perfect solution, due to sheer computational constraints. RPKI is already being deployed but it only solves half of the problem. Selective hop verification and statistical anomaly detection show promising advantages over BGPsec. By balancing the security cost and trade off space between RPKI and BGPsec ,we aim to identify practical solution towards global internet routing.
+
+\begin{thebibliography}{00}
+\bibitem{b1} M. Lepinski and K. Sriram, ``BGPsec Protocol Specification,'' RFC 8205, September 2017.
+\bibitem{b2} M. Lepinski and S. Kent, ``An Infrastructure to Support Secure Internet Routing,'' RFC 6480, February 2012.
+\bibitem{b3} Y. Gilad et al., ``Are We There Yet? On RPKI's Deployment and Security,'' in \textit{Proc. NDSS}, 2017.
+\bibitem{b4} K. Butler et al., ``A Survey of BGP Security Issues and Solutions,'' \textit{Proceedings of the IEEE}, vol. 98, no. 1, pp. 100-122, January 2010.
+\bibitem{b5} J. Karlin et al., ``Pretty Good BGP: Improving BGP by Cautiously Adopting Routes,'' in \textit{Proc. IEEE ICNP}, 2006.
+\end{thebibliography}
+
+\end{document}

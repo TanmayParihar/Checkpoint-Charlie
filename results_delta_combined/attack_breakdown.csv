@@ -1,0 +1,12 @@
+validator,origin_hijack,path_fabrication,path_shortening
+RPKI,0.4758,0.0,0.0
+Selective: Origin Only,0.9774,0.0046,0.5709
+Origin + 1st Hop,0.9774,0.4681,0.8816
+Origin + Last Hop,0.9774,0.489,0.8617
+Origin + 1st + Last,0.9774,0.8026,0.9871
+Origin + 2 Hops + Last,0.9774,0.9617,1.0
+BGPsec (Full Path),0.9774,1.0,1.0
+Anomaly Detector,0.9806,0.6423,0.6049
+Selective + Anomaly,0.9806,0.9419,0.9871
+Delta Trust,0.9774,1.0,1.0
+Delta + Selective + Anomaly,0.9806,1.0,1.0
